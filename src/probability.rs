@@ -15,7 +15,7 @@ impl<V> Distribution<V> {
         let mut distribution: Vec<_> = distribution.collect();
 
         let mut sum = 0.0;
-        for (weight, val) in distribution.iter_mut() {
+        for (weight, _) in distribution.iter_mut() {
             if !weight.is_finite() {
                 return Err(ArgumentError::NotFinite);
             }
@@ -27,7 +27,7 @@ impl<V> Distribution<V> {
             sum += temp;
         }
 
-        for (weight, val) in distribution.iter_mut() {
+        for (weight, _) in distribution.iter_mut() {
             *weight /= sum;
         }
 
@@ -39,12 +39,12 @@ impl<V> Distribution<V> {
 }
 
 impl<K: Copy> Distribution<K> {
-    pub fn gen_element(&mut self) -> K {
+    pub fn sample(&mut self) -> K {
         let rnd = self.rng.sample(Uniform::new(0.0, 1.0));
 
         let val_idx = self
             .distribution
-            .binary_search_by(|&(weight, val)| weight.partial_cmp(&rnd).unwrap());
+            .binary_search_by(|&(weight, _)| weight.partial_cmp(&rnd).unwrap());
 
         let val_idx = val_idx.unwrap_or_else(|idx| idx - 1) + 1;
 

@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use slotmap::{new_key_type, SlotMap};
 
 use crate::probability::Distribution;
@@ -5,6 +7,12 @@ use crate::probability::Distribution;
 #[derive(Debug)]
 pub enum ActionError {
     ActionDoesNotExist,
+}
+
+trait Environment<S, A> {
+    fn perform_action(&mut self, action: &A) -> Reward;
+
+    fn cur_state(&self) -> &S;
 }
 
 #[derive(Clone, Copy)]
@@ -85,4 +93,50 @@ impl MDP {
         self.states[state].do_action(action)
     }
 }
+
+struct MDPEnvironment {
+    mdp: MDP,
+    cur_state: StateKey,
+}
+
+impl MDPEnvironment {
+    fn new(mdp: MDP, starting_state: StateKey) -> MDPEnvironment {
+        MDPEnvironment {
+            mdp,
+            cur_state: starting_state,
+        }
+    }
+}
+
+impl Deref for MDPEnvironment {
+    type Target = MDP;
+
+    fn deref(&self) -> &MDP {
+        &self.mdp
+    }
+}
+
+impl DerefMut for MDPEnvironment {
+    fn deref_mut(&mut self) -> &mut MDP {
+        &mut self.mdp
+    }
+}
+
+impl Environment<StateKey, usize> for MDPEnvironment {
+    fn perform_action(&mut self, action: &usize) -> Reward {
+        let action = *action;
+
+        let (new_state, reward) = self
+            .mdp
+            .sample_transition(self.cur_state, action)
+            .expect("Action does not exist in the MDP");
+
+        self.cur_state = new_state;
+
+        reward
+    }
+
+    fn cur_state(&self) -> &StateKey {
+        &self.cur_state
+    }
 }
