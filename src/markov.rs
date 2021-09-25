@@ -9,7 +9,7 @@ pub enum ActionError {
     ActionDoesNotExist,
 }
 
-trait Environment<S, A> {
+pub trait Environment<S, A> {
     fn perform_action(&mut self, action: &A) -> Reward;
 
     fn cur_state(&self) -> &S;
@@ -19,11 +19,11 @@ trait Environment<S, A> {
 pub struct Reward(f32);
 
 impl Reward {
-    fn new(val: f32) -> Reward {
+    pub fn new(val: f32) -> Reward {
         Reward(val)
     }
 
-    fn value(&self) -> f32 {
+    pub fn value(&self) -> f32 {
         self.0
     }
 }
@@ -53,8 +53,8 @@ impl State {
         }
     }
 
-    fn do_action(&mut self, action: usize) -> Result<(StateKey, Reward), ActionError> {
-        if let Some(distribution) = self.transitions.get_mut(action) {
+    fn do_action(&self, action: usize) -> Result<(StateKey, Reward), ActionError> {
+        if let Some(distribution) = self.transitions.get(action) {
             Ok(distribution.sample())
         } else {
             Err(ActionError::ActionDoesNotExist)
@@ -66,9 +66,28 @@ new_key_type! { pub struct StateKey; }
 
 pub struct MDP {
     states: SlotMap<StateKey, State>,
+    gamma: f32,
 }
 
 impl MDP {
+    pub fn new(gamma: f32) -> MDP {
+        if !gamma.is_finite() {
+            panic!("Cannot create an MDP with a NaN / Infinite gamma (discounting) value");
+        }
+        if gamma <= 0.0 || gamma >= 1.0 {
+            panic!("The discounting factor gamma must be in the range (0,1) (inclusive)");
+        }
+
+        MDP {
+            states: SlotMap::with_key(),
+            gamma: gamma,
+        }
+    }
+
+    pub fn gamma(&self) -> f32 {
+        self.gamma
+    }
+
     pub fn add_state(&mut self, state: State) -> StateKey {
         self.states.insert(state)
     }
@@ -86,21 +105,25 @@ impl MDP {
     }
 
     pub fn sample_transition(
-        &mut self,
+        &self,
         state: StateKey,
         action: usize,
     ) -> Result<(StateKey, Reward), ActionError> {
         self.states[state].do_action(action)
     }
+
+    pub fn states(&self) -> &SlotMap<StateKey, State> {
+        &self.states
+    }
 }
 
-struct MDPEnvironment {
-    mdp: MDP,
+pub struct MDPEnvironment<'a> {
+    mdp: &'a MDP,
     cur_state: StateKey,
 }
 
-impl MDPEnvironment {
-    fn new(mdp: MDP, starting_state: StateKey) -> MDPEnvironment {
+impl<'a> MDPEnvironment<'a> {
+    pub fn new(mdp: &'a MDP, starting_state: StateKey) -> MDPEnvironment<'a> {
         MDPEnvironment {
             mdp,
             cur_state: starting_state,
@@ -108,7 +131,7 @@ impl MDPEnvironment {
     }
 }
 
-impl Deref for MDPEnvironment {
+impl<'a> Deref for MDPEnvironment<'a> {
     type Target = MDP;
 
     fn deref(&self) -> &MDP {
@@ -116,13 +139,7 @@ impl Deref for MDPEnvironment {
     }
 }
 
-impl DerefMut for MDPEnvironment {
-    fn deref_mut(&mut self) -> &mut MDP {
-        &mut self.mdp
-    }
-}
-
-impl Environment<StateKey, usize> for MDPEnvironment {
+impl<'a> Environment<StateKey, usize> for MDPEnvironment<'a> {
     fn perform_action(&mut self, action: &usize) -> Reward {
         let action = *action;
 

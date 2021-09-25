@@ -1,17 +1,28 @@
-use rand::{distributions::Uniform, prelude::ThreadRng, thread_rng, Rng};
+use std::fmt::Debug;
 
+use rand::{distributions::Uniform, thread_rng, Rng};
+
+#[derive(Debug)]
 pub enum ArgumentError {
     NonPositive,
     NotFinite,
+    SizeMismatch,
 }
 
-pub struct Distribution<V> {
+pub struct Distribution<V: Copy> {
     distribution: Vec<(f32, V)>,
-    rng: ThreadRng,
 }
 
-impl<V> Distribution<V> {
-    pub fn new(distribution: impl Iterator<Item = (f32, V)>) -> Result<Self, ArgumentError> {
+impl<V: Copy> Distribution<V> {
+    pub fn new(items: Vec<V>, weights: Vec<f32>) -> Result<Self, ArgumentError> {
+        if items.len() != weights.len() {
+            return Err(ArgumentError::SizeMismatch);
+        }
+
+        Distribution::from(weights.into_iter().zip(items.into_iter()))
+    }
+
+    pub fn from(distribution: impl Iterator<Item = (f32, V)>) -> Result<Self, ArgumentError> {
         let mut distribution: Vec<_> = distribution.collect();
 
         let mut sum = 0.0;
@@ -31,22 +42,22 @@ impl<V> Distribution<V> {
             *weight /= sum;
         }
 
-        Ok(Distribution {
-            distribution,
-            rng: thread_rng(),
-        })
+        Ok(Distribution { distribution })
     }
 }
 
 impl<K: Copy> Distribution<K> {
-    pub fn sample(&mut self) -> K {
-        let rnd = self.rng.sample(Uniform::new(0.0, 1.0));
+    pub fn sample(&self) -> K {
+        let rnd = thread_rng().sample(Uniform::new(0.0, 1.0));
 
         let val_idx = self
             .distribution
             .binary_search_by(|&(weight, _)| weight.partial_cmp(&rnd).unwrap());
 
-        let val_idx = val_idx.unwrap_or_else(|idx| idx - 1) + 1;
+        let val_idx = match val_idx {
+            Ok(val_idx) => val_idx,
+            Err(val_idx) => val_idx,
+        };
 
         self.distribution[val_idx].1
     }
