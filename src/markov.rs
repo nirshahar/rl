@@ -129,6 +129,10 @@ impl<'a> MDPEnvironment<'a> {
             cur_state: starting_state,
         }
     }
+
+    pub fn reset(&mut self, starting_state: StateKey) {
+        self.cur_state = starting_state;
+    }
 }
 
 impl<'a> Deref for MDPEnvironment<'a> {
@@ -155,5 +159,81 @@ impl<'a> Environment<StateKey, usize> for MDPEnvironment<'a> {
 
     fn cur_state(&self) -> &StateKey {
         &self.cur_state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        markov::{Environment, MDPEnvironment, Reward},
+        probability::Distribution,
+    };
+
+    use super::MDP;
+
+    #[test]
+    fn test_cycle_ddp() {
+        let prob_weight = 1.0;
+        let num_states = 13;
+        let num_steps = 10000;
+
+        let mut mdp = MDP::new(0.9);
+
+        let mut states = Vec::new();
+        for _ in 0..num_states {
+            states.push(mdp.add_new_state());
+        }
+
+        for (i, &state) in states.iter().enumerate() {
+            mdp.add_transition(
+                state,
+                Distribution::new(
+                    vec![(states[(i + 1) % states.len()], Reward::new(i as f32))],
+                    vec![prob_weight],
+                )
+                .unwrap(),
+            );
+            mdp.add_transition(
+                state,
+                Distribution::new(
+                    vec![(
+                        states[(i + states.len() - 1) % states.len()],
+                        Reward::new(i as f32),
+                    )],
+                    vec![prob_weight],
+                )
+                .unwrap(),
+            );
+        }
+
+        let mut mdp_environment = MDPEnvironment::new(&mdp, states[0]);
+
+        for i in 0..num_steps {
+            assert_eq!(*mdp_environment.cur_state(), states[i % states.len()]);
+            assert_eq!(
+                mdp_environment.perform_action(&0).value(),
+                (i % states.len()) as f32
+            );
+        }
+
+        mdp_environment.reset(states[0]);
+
+        for i in 0..num_steps {
+            assert_eq!(
+                *mdp_environment.cur_state(),
+                states[(num_steps * states.len() - i) % states.len()]
+            );
+            assert_eq!(
+                mdp_environment.perform_action(&1).value(),
+                ((num_steps * states.len() - i) % states.len()) as f32
+            );
+        }
+
+        mdp_environment.reset(states[0]);
+
+        for i in 0..num_steps {
+            assert_eq!(*mdp_environment.cur_state(), states[i % 2]);
+            mdp_environment.perform_action(&(i % 2)).value();
+        }
     }
 }
