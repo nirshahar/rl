@@ -16,7 +16,7 @@ pub trait Environment<S, A> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Reward(f32);
+pub struct Reward(pub f32);
 
 impl Reward {
     pub fn new(val: f32) -> Reward {
@@ -43,7 +43,7 @@ impl DerefMut for Reward {
 }
 
 pub struct State {
-    transitions: Vec<Distribution<(StateKey, Reward)>>,
+    pub transitions: Vec<Distribution<(StateKey, Reward)>>,
 }
 
 impl State {
