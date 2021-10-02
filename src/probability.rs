@@ -10,7 +10,7 @@ pub enum ArgumentError {
 }
 
 pub struct Distribution<V: Copy> {
-    distribution: Vec<(f32, V)>,
+    distribution: Vec<(V, f32)>,
 }
 
 impl<V: Copy> Distribution<V> {
@@ -19,14 +19,14 @@ impl<V: Copy> Distribution<V> {
             return Err(ArgumentError::SizeMismatch);
         }
 
-        Distribution::from(weights.into_iter().zip(items.into_iter()))
+        Distribution::from(items.into_iter().zip(weights.into_iter()))
     }
 
-    pub fn from(distribution: impl Iterator<Item = (f32, V)>) -> Result<Self, ArgumentError> {
+    pub fn from(distribution: impl Iterator<Item = (V, f32)>) -> Result<Self, ArgumentError> {
         let mut distribution: Vec<_> = distribution.collect();
 
         let mut sum = 0.0;
-        for (weight, _) in distribution.iter_mut() {
+        for (_, weight) in distribution.iter_mut() {
             if !weight.is_finite() {
                 return Err(ArgumentError::NotFinite);
             }
@@ -38,7 +38,7 @@ impl<V: Copy> Distribution<V> {
             sum += temp;
         }
 
-        for (weight, _) in distribution.iter_mut() {
+        for (_, weight) in distribution.iter_mut() {
             *weight /= sum;
         }
 
@@ -52,15 +52,21 @@ impl<K: Copy> Distribution<K> {
 
         let val_idx = self
             .distribution
-            .binary_search_by(|&(weight, _)| weight.partial_cmp(&rnd).unwrap());
+            .binary_search_by(|&(_, weight)| weight.partial_cmp(&rnd).unwrap());
 
         let val_idx = match val_idx {
             Ok(val_idx) => val_idx,
             Err(val_idx) => val_idx,
         };
 
-        self.distribution[val_idx].1
+        self.distribution[val_idx].0
     }
+}
+
+pub fn throw_coin(p: f32) -> bool {
+    let d = Distribution::new(vec![true, false], vec![p, 1.0 - p]).unwrap();
+
+    d.sample()
 }
 
 #[cfg(test)]
