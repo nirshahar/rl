@@ -1,10 +1,11 @@
-use std::{env, ops::Index};
+use std::ops::Index;
 
 use slotmap::SecondaryMap;
 
 use crate::markov::{ActionError, Environment, MDPEnvironment, Reward, StateKey, MDP};
 
 use crate::miscellaneous::ArgOrd;
+use crate::probability::{throw_coin, Distribution};
 
 pub struct MDPPolicy<'a> {
     mdp: &'a MDP,
@@ -70,6 +71,7 @@ impl MDP {
         &self,
         epoch_size: usize,
         learning_rate: f32,
+        epsilon: f32,
     ) -> SecondaryMap<StateKey, Vec<f32>> {
         let mut q_func: SecondaryMap<StateKey, Vec<f32>> = SecondaryMap::new();
         let mut num_seen: SecondaryMap<StateKey, Vec<usize>> = SecondaryMap::new();
@@ -91,10 +93,17 @@ impl MDP {
             let mut simulation = MDPEnvironment::new(&self, starting_state);
 
             for _ in 0..epoch_size {
-                self.perform_q_update(&mut simulation, &mut q_func, &mut num_seen, learning_rate);
+                self.perform_q_update(
+                    &mut simulation,
+                    &mut q_func,
+                    &mut num_seen,
+                    learning_rate,
+                    epsilon,
+                );
             }
         }
-        todo!()
+
+        q_func
     }
 
     fn perform_q_update(
@@ -103,6 +112,7 @@ impl MDP {
         q_function: &mut SecondaryMap<StateKey, Vec<f32>>,
         num_seen: &mut SecondaryMap<StateKey, Vec<usize>>,
         learning_rate: f32,
+        epsilon: f32,
     ) {
         let cur_state = *environment.cur_state();
 
@@ -111,9 +121,21 @@ impl MDP {
         let reward = environment.perform_action(&action).value();
         let new_state = *environment.cur_state();
 
-        let expected_maximal_reward = reward + self.gamma() * q_function[new_state].max_val();
-        q_function[cur_state][action] = (1.0 - learning_rate) * q_function[cur_state][action]
-            + learning_rate * expected_maximal_reward;
+        let future_reward = if throw_coin(epsilon) {
+            let len = q_function[new_state].len();
+            let itr_item = 0..len;
+            let itr_weight = (0..len).map(|_| 1.0);
+
+            let distribution = Distribution::from(itr_item.zip(itr_weight)).unwrap();
+
+            q_function[new_state][distribution.sample()]
+        } else {
+            q_function[new_state].max_val()
+        };
+
+        let expected_reward = reward + self.gamma() * future_reward;
+        q_function[cur_state][action] =
+            (1.0 - learning_rate) * q_function[cur_state][action] + learning_rate * expected_reward;
     }
 }
 

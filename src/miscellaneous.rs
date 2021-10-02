@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 pub trait ArgOrd<T: PartialOrd> {
     fn arg_max(&self) -> Option<usize>;
     fn arg_min(&self) -> Option<usize>;
