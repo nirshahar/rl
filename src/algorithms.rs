@@ -25,6 +25,15 @@ impl<'a> MDPPolicy<'a> {
         Self { mdp, policy }
     }
 
+    pub fn from_q(mdp: &'a MDP, q_func: SecondaryMap<StateKey, Vec<f32>>) -> Self {
+        let mut action_chosen = SecondaryMap::new();
+        for (state_key, action_values) in q_func {
+            action_chosen.insert(state_key, action_values.arg_max());
+        }
+
+        MDPPolicy::new(mdp, action_chosen)
+    }
+
     pub fn sample_action_result(&self, state: StateKey) -> Result<(StateKey, Reward), ActionError> {
         self.mdp.sample_transition(state, self.policy[state])
     }
@@ -116,7 +125,7 @@ impl MDP {
     ) {
         let cur_state = *environment.cur_state();
 
-        let action = num_seen[cur_state].arg_min().unwrap();
+        let action = num_seen[cur_state].arg_min();
 
         let reward = environment.perform_action(&action).value();
         let new_state = *environment.cur_state();
