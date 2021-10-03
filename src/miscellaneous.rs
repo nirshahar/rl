@@ -6,7 +6,7 @@ pub trait ArgOrd<T: PartialOrd> {
     fn max_val(&self) -> T;
 }
 
-impl<T: PartialOrd + Copy> ArgOrd<T> for Vec<T> {
+impl<T: PartialOrd + Copy> ArgOrd<T> for [T] {
     fn arg_max(&self) -> usize {
         self.iter()
             .enumerate()
