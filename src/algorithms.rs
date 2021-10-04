@@ -77,19 +77,12 @@ impl<const S: usize, const A: usize> MDP<S, A> {
         epsilon: f32,
     ) -> [[f32; A]; S] {
         let mut q_func = [[0.0; A]; S];
-        let mut num_seen = [[0usize; A]; S];
 
         for starting_state in 0..self.num_states() {
             let mut simulation = MDPEnvironment::new(&self, starting_state);
 
             for _ in 0..epoch_size {
-                self.perform_q_update(
-                    &mut simulation,
-                    &mut q_func,
-                    &mut num_seen,
-                    learning_rate,
-                    epsilon,
-                );
+                self.perform_q_update(&mut simulation, &mut q_func, learning_rate, epsilon);
             }
         }
 
@@ -100,30 +93,31 @@ impl<const S: usize, const A: usize> MDP<S, A> {
         &self,
         environment: &mut MDPEnvironment<S, A>,
         q_function: &mut [[f32; A]; S],
-        num_seen: &mut [[usize; A]; S],
         learning_rate: f32,
         epsilon: f32,
     ) {
         let cur_state = environment.cur_state();
 
-        let action = num_seen[cur_state].arg_min();
+        let action = if throw_coin(epsilon) {
+            let len = q_function[cur_state].len();
 
-        let reward = environment.perform_action(action).value();
-        let new_state = environment.cur_state();
-
-        let future_reward = if throw_coin(epsilon) {
-            let len = q_function[new_state].len();
             let itr_item = 0..len;
             let itr_weight = (0..len).map(|_| 1.0);
 
             let distribution = Distribution::from(itr_item.zip(itr_weight)).unwrap();
 
-            q_function[new_state][distribution.sample()]
+            distribution.sample()
         } else {
-            q_function[new_state].max_val()
+            q_function[cur_state].arg_max()
         };
 
+        let reward = environment.perform_action(action).value();
+        let new_state = environment.cur_state();
+
+        let future_reward = q_function[new_state].max_val();
+
         let expected_reward = reward + self.gamma() * future_reward;
+
         q_function[cur_state][action] =
             (1.0 - learning_rate) * q_function[cur_state][action] + learning_rate * expected_reward;
     }
